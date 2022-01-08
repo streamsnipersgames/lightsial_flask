@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>URL Reader</title>
+    <style>
+        body {
+            box-sizing: border-box;
+            background-color: #121212;
+            font-size: 18px;
+            color: #999;
+        }
+
+        a {
+            color: #999;
+        }
+
+        a:visited {
+            color: #d7ca25;
+        }
+         
+        form {
+            margin: 40px 0 0 40px;
+        }
+        .request {
+            margin: 20px;
+            padding: 20px;
+            background: #336639;
+            color: #fff;
+            width: 300px;
+        }
+    </style>
+</head>
+<script>
+    
+</script>
+<body>
+    {% if status %}
+        <p class="request">
+            Request was saved successfully.
+        </p>
+    {% endif %}
+    <form action="" method="post">
+        Stream URL: <input type="text" name="twitch_url" placeholder="Enter Stream URL" value="">
+        <input type="submit" value="Submit">
+    </form>
+</body>
+
+</html>
