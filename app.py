@@ -29,7 +29,8 @@ def gameScoreKeeper():
         with con.cursor() as cur:
             # to avoid sql injections parametrised/compiled query
             cur.execute(
-                f"INSERT INTO api_gsk_fifa (twitch_url, added_on_to_db) VALUES ('{twitch_url}', '{int(datetime.now().timestamp())}')",
+                "INSERT INTO api_gsk_fifa (twitch_url, added_on_to_db) VALUES (%s, %s)",
+                (twitch_url, int(datetime.now().timestamp())),
             )
             # commit transactions
             con.commit()
