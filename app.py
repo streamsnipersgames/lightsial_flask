@@ -46,7 +46,7 @@ def get_duel_supported_games():
     if request.method == "GET":
         with con.cursor() as cur:
             cur.execute("select game_id, game_name from api_duel_supportedgames")
-        results = json.dumps({x[0]: x[1] for x in cur.fetchall()})
+            results = json.dumps({x[0]: x[1] for x in cur.fetchall()})
     else:
         results = json.dumps({})
     con.close()
