@@ -21,4 +21,13 @@ aws lightsail push-container-image --region us-east-1 --service-name flask-servi
 # get container
 aws lightsail get-container-services --service-name flask-service
 
+# deploy container
+aws lightsail create-container-service-deployment --service-name flask-service --containers file://containers.json --public-endpoint file://public-endpoint.json
 ```
+
+## Deployment steps:
+- build container in current folder
+- try container on local
+- push container
+- after pushing it'll tell u number update containers.json with new number
+- deploy container 

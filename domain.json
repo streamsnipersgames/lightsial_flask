@@ -1,0 +1,15 @@
+{
+    "Comment": "Comment",
+    "Changes": [{
+        "Action": "CREATE",
+        "ResourceRecordSet": {
+            "Name": "@.vodsearch.tv",
+            "Type": "A",
+            "AliasTarget": {
+            "HostedZoneId": "Z06246771KYU0IRHI74W4",
+            "DNSName": "flask-service.m8uthda01otfs.us-east-1.cs.amazonlightsail.com",
+            "EvaluateTargetHealth": false
+            }
+        }
+    }]
+}
