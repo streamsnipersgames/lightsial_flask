@@ -70,7 +70,6 @@ def post_duel_booking():
             con.close()
             return "Success."
         except:
-            print(e)
             return "Failure."
 
 
