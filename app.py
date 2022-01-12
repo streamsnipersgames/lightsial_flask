@@ -60,18 +60,18 @@ def post_duel_booking():
     required_fields = ("booking_id", "starts_at", "ends_at", "igdb_game_id", "igdb_platform_id", "vod_url")
     if request.method == "POST":
         assert set(request.form.keys()) == set(required_fields)
-        # try:
-        with con.cursor() as cur:
-            cur.execute(
-                f"insert into api_duel_bookings ({', '.join(required_fields)}) values (%s, %s, %s, %s, %s, %s)",
-                tuple([request.form[field] for field in required_fields]),
-            )
-        con.commit()
-        con.close()
-        return "Success."
-        # except as e:
-        #     print(e)
-        #     return "Failure."
+        try:
+            with con.cursor() as cur:
+                cur.execute(
+                    f"insert into api_duel_bookings ({', '.join(required_fields)}) values (%s, %s, %s, %s, %s, %s)",
+                    tuple([request.form[field] for field in required_fields]),
+                )
+            con.commit()
+            con.close()
+            return "Success."
+        except:
+            print(e)
+            return "Failure."
 
 
 @app.route('/', defaults={'path': ''})
