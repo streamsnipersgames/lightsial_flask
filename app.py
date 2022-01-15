@@ -72,31 +72,31 @@ def post_duel_booking():
     status = None
     if "Authorization" not in request.headers:
         con.close()
-        return json.dumps({"Success": False, "Description": "missing token"}), 401
+        return {"Success": False, "Description": "missing token"}, 401
     if token != request.headers["Authorization"]:
         con.close()
-        return json.dumps({"Success": False, "Description": "bad or expired token, please contact rob@vodsearch.tv to fix"}), 401
+        return {"Success": False, "Description": "bad or expired token, please contact rob@vodsearch.tv to fix"}, 401
     if request.method == "GET":
         # return supported games
         results = get_duel_game_ids(con)
         con.close()
-        return json.dumps({"Success": True, "Description": "", "Games": results}), 200
+        return {"Success": True, "Description": "", "Games": results}, 200
     elif request.method == "DELETE":
         # delete existing booking
         if set(request.form.keys()) != {"booking_id"}:
             con.close()
-            return json.dumps({"Success": False, "Description": "only field provided must be 'booking_id'"}), 400
+            return {"Success": False, "Description": "only field provided must be 'booking_id'"}, 400
         with con.cursor() as cur:
             cur.execute("select id from api_duel_bookings where booking_id = %s", (request.form["booking_id"], ))
             results = cur.fetchall()
         if len(results) == 0:
             con.close()
-            return json.dumps({"Success": False, "Description": "booking_id provided not found"}), 400
+            return {"Success": False, "Description": "booking_id provided not found"}, 400
         with con.cursor() as cur:
             cur.execute("delete from api_duel_bookings where booking_id = %s", (request.form["booking_id"], ))
         con.commit()
         con.close()
-        return json.dumps({"Success": True, "Description": ""}), 201
+        return {"Success": True, "Description": ""}, 201
     elif request.method in ["POST", "PUT", "PATCH"]:
         # add new booking or modify existing booking
         required_fields = ("booking_id", "starts_at", "ends_at", "igdb_game_id", "igdb_platform_id", "vod_url")
@@ -119,12 +119,12 @@ def post_duel_booking():
                 error_msg = "duel is shorter than 1 minute, please double-check your start and end times"
         if error_msg is not None:
             con.close()
-            return json.dumps({"Success": False, "Description": error_msg}), 400
+            return {"Success": False, "Description": error_msg}, 400
         supported_games_and_platforms = [(x["game_id"], x["platform_id"]) for x in get_duel_game_ids(con)]
         game_id, platform_id = int(request.form["igdb_game_id"]), int(request.form["igdb_platform_id"])
         if (game_id, platform_id) not in supported_games_and_platforms:
             con.close()
-            return json.dumps({"Success": False, "Description": f"(game, platform) pair not supported, currently supporting: {supported_games_and_platforms}"}), 400
+            return {"Success": False, "Description": f"(game, platform) pair not supported, currently supporting: {supported_games_and_platforms}"}, 400
         if request.method == "POST":
             # first, just confirm the booking id doesn't already exist in our system
             with con.cursor() as cur:
@@ -132,7 +132,7 @@ def post_duel_booking():
                 result = cur.fetchall()
             if len(result) > 0:
                 con.close()
-                return json.dumps({"Success": False, "Description": "this booking id already exists, did you mean to send a PUT/PATCH request instead?"}), 400
+                return {"Success": False, "Description": "this booking id already exists, did you mean to send a PUT/PATCH request instead?"}, 400
             with con.cursor() as cur:
                 cur.execute(
                     f"insert into api_duel_bookings ({', '.join(required_fields)}) values (%s, %s, %s, %s, %s, %s)",
@@ -140,7 +140,7 @@ def post_duel_booking():
                 )
             con.commit()
             con.close()
-            return json.dumps({"Success": True, "Description": ""}), 201
+            return {"Success": True, "Description": ""}, 201
         elif request.method in ["PUT", "PATCH"]:
             booking_id = request.form["booking_id"]
             with con.cursor() as cur:
@@ -148,7 +148,7 @@ def post_duel_booking():
                 result = cur.fetchall()
                 if len(result) == 0:
                     con.close()
-                    return json.dumps({"Success": False, "Description": "booking id not recognized"}), 400
+                    return {"Success": False, "Description": "booking id not recognized"}, 400
                 booking_id = result[0][0]
                 field_cmd = ", ".join([f"{field} = %s" for field in required_fields])
                 field_values = [request.form.get(field) for field in required_fields]
@@ -157,7 +157,7 @@ def post_duel_booking():
                 )
             con.commit()
             con.close()
-            return json.dumps({"Success": True, "Description": ""}), 201
+            return {"Success": True, "Description": ""}, 201
 
 
 @app.route('/', defaults={'path': ''})
