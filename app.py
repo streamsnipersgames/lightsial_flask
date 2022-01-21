@@ -128,7 +128,7 @@ def post_duel_booking():
         if request.method == "POST":
             # first, just confirm the booking id doesn't already exist in our system
             with con.cursor() as cur:
-                cur.execute(f"select id from api_duel_bookings where booking_id = %s", request.form["booking_id"])
+                cur.execute(f"select id from api_duel_bookings where booking_id = %s", (request.form["booking_id"], ))
                 result = cur.fetchall()
             if len(result) > 0:
                 con.close()
@@ -144,7 +144,7 @@ def post_duel_booking():
         elif request.method in ["PUT", "PATCH"]:
             booking_id = request.form["booking_id"]
             with con.cursor() as cur:
-                cur.execute(f"select id from api_duel_bookings where booking_id = '{booking_id}'")
+                cur.execute(f"select id from api_duel_bookings where booking_id = %s", (booking_id, ))
                 result = cur.fetchall()
                 if len(result) == 0:
                     con.close()
