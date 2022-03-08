@@ -12,9 +12,6 @@ docker build -t flask-container .
 # run container locally
 docker run -p 5000:5000 flask-container 
 
-# create container
-aws lightsail create-container-service-deployment --service-name flask-service --containers file://containers.json --public-endpoint file://public-endpoint.json
-
 # push container
 aws lightsail push-container-image --region us-east-1 --service-name flask-service --label flask --image flask-container:latest
 
