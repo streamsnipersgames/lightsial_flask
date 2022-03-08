@@ -27,7 +27,7 @@ def get_token(db_connection, client_name):
     return token[0][0]
 
 
-@app.route('/api/gsk/fifa_add_fixture', methods=('GET', 'POST'))
+@app.route('/api/gsk/fifa_add_fixture', methods=('GET', 'POST'), strict_slashes=False)
 def post_gsk_fifa_new_fixture():
     con = establish_db_connection()
     token = get_token(con, "gsk")
@@ -65,7 +65,14 @@ def get_duel_game_ids(db_connection):
     return [{"game_id": x[0], "platform_id": x[1]} for x in results]
 
 
-@app.route('/api/duel/booking/', methods=('GET', 'POST', 'DELETE', 'PUT', 'PATCH', ))
+def get_wehype_stfc_creators(db_connection, table_name):
+    with db_connection.cursor() as cur:
+        cur.execute(f"select creator from {table_name}")
+        results = cur.fetchall()
+    return [x[0] for x in results]
+
+
+@app.route('/api/duel/booking/', methods=('GET', 'POST', 'DELETE', 'PUT', 'PATCH', ), strict_slashes=False)
 def post_duel_booking():
     con = establish_db_connection()
     token = get_token(con, "duel")
@@ -99,7 +106,7 @@ def post_duel_booking():
         return {"success": True, "description": ""}, 201
     elif request.method in ["POST", "PUT", "PATCH"]:
         # add new booking or modify existing booking
-        required_fields = ("booking_id", "starts_at", "ends_at", "igdb_game_id", "igdb_platform_id", "vod_url")
+        required_fields = ("booking_id", "starts_at", "ends_at", "igdb_game_slug", "igdb_platform_id", "vod_url")
         error_msg = None
         if set(request.form.keys()) != set(required_fields):
             # fields don't match
@@ -121,7 +128,7 @@ def post_duel_booking():
             con.close()
             return {"success": False, "description": error_msg}, 400
         supported_games_and_platforms = [(x["game_id"], x["platform_id"]) for x in get_duel_game_ids(con)]
-        game_id, platform_id = int(request.form["igdb_game_id"]), int(request.form["igdb_platform_id"])
+        game_id, platform_id = int(request.form["igdb_game_slug"]), int(request.form["igdb_platform_id"])
         if (game_id, platform_id) not in supported_games_and_platforms:
             con.close()
             return {"success": False, "description": f"(game, platform) pair not supported, currently supporting: {supported_games_and_platforms}"}, 400
@@ -158,6 +165,67 @@ def post_duel_booking():
             con.commit()
             con.close()
             return {"success": True, "description": ""}, 201
+
+
+@app.route('/api/wehype/stfc/', methods=('GET', 'POST', 'DELETE', ), strict_slashes=False)
+def api_wehype_stfc():
+    con = establish_db_connection()
+    token = get_token(con, "wehype")
+    table_name = "api_wehype_stfc"
+    status = None
+    if "Authorization" not in request.headers:
+        con.close()
+        return {"success": False, "description": "missing token"}, 401
+    if token != request.headers["Authorization"]:
+        con.close()
+        return {"success": False, "description": "bad or expired token, please contact rob@vodsearch.tv to fix"}, 401
+    if request.method == "GET":
+        # return supported games
+        results = get_wehype_stfc_creators(con, table_name)
+        con.close()
+        return {"success": True, "description": "", "creators": results}, 200
+    elif request.method == "DELETE":
+        # delete existing creator
+        if set(request.form.keys()) != {"creator"}:
+            con.close()
+            return {"success": False, "description": "only field provided must be 'creator'"}, 400
+        with con.cursor() as cur:
+            cur.execute(f"select id from {table_name} where creator = %s", (request.form["creator"], ))
+            results = cur.fetchall()
+        if len(results) == 0:
+            con.close()
+            return {"success": False, "description": "creator provided not found"}, 400
+        with con.cursor() as cur:
+            cur.execute(f"delete from {table_name} where creator = %s", (request.form["creator"], ))
+        con.commit()
+        con.close()
+        return {"success": True, "description": ""}, 201
+    elif request.method == "POST":
+        # import ipdb; ipdb.set_trace()
+        # add new creator or modify existing creator
+        required_fields = ("creator", )
+        error_msg = None
+        if set(request.form.keys()) != set(required_fields):
+            # fields don't match
+            error_msg = f"info provided doesn't match expectation, expecting fields: {required_fields}"
+        if error_msg is not None:
+            con.close()
+            return {"success": False, "description": error_msg}, 400
+        # first, just confirm the creator doesn't already exist in our system
+        with con.cursor() as cur:
+            cur.execute(f"select id from {table_name} where creator = %s", (request.form["creator"], ))
+            result = cur.fetchall()
+        if len(result) > 0:
+            con.close()
+            return {"success": False, "description": "this creator has already been entered, did you mean to send another?"}, 400
+        with con.cursor() as cur:
+            cur.execute(
+                f"insert into {table_name} ({', '.join(required_fields)}) values (%s)",
+                tuple([request.form[field] for field in required_fields]),
+            )
+        con.commit()
+        con.close()
+        return {"success": True, "description": ""}, 201
 
 
 @app.route('/', defaults={'path': ''})
