@@ -27,7 +27,7 @@ def get_token(db_connection, client_name):
     return token[0][0]
 
 
-@app.route('/api/gsk/fifa_add_fixture', methods=('GET', 'POST'), strict_slashes=False)
+@app.route('/api/gsk/fifa/', methods=('POST', ), strict_slashes=False)
 def post_gsk_fifa_new_fixture():
     con = establish_db_connection()
     token = get_token(con, "gsk")
@@ -40,22 +40,38 @@ def post_gsk_fifa_new_fixture():
             con.close()
             return "bad or expired token, please contact rob@vodsearch.tv to fix", 401
         twitch_url = request.form.get('twitch_url', None)
+        fixture_id = request.form.get('fixture_id', None)
+        ts_start = request.form.get("ts_start", None)
+        early_stop = request.form.get("early_stop", None)
+
+        if fixture_id is None:
+            con.close()
+            return "must supply fixture_id", 400
+
+        if early_stop is not None:
+            with con.cursor() as cur:
+                cur.execute(
+                    "UPDATE api_gsk_fifa set status = 2 where fixture_id = %s", (fixture_id, ),
+                )
+            con.commit()
+            con.close()
+            return "success", 201
+
         if twitch_url is None:
             con.close()
-            return "must supply twitch_url", 400
-        fixture_id = request.form.get('fixture_id', None)
+            return "must supply twitch_url (url to watch)", 400
+        if ts_start is None:
+            con.close()
+            return "must supply ts_start (starting timestamp) or early_stop", 400
+
         with con.cursor() as cur:
-            # to avoid sql injections parametrised/compiled query
             cur.execute(
-                "INSERT INTO api_gsk_fifa (twitch_url, fixture_id, added_on_to_db) VALUES (%s, %s, %s)",
-                (twitch_url, fixture_id, int(datetime.now().timestamp())),
+                "INSERT INTO api_gsk_fifa (twitch_url, fixture_id, ts_start, added_on_to_db, status) VALUES (%s, %s, %s, %s, 0)",
+                (twitch_url, fixture_id, int(ts_start), int(datetime.now().timestamp())),
             )
             con.commit()
-        con.close()
-        return "success", 201
-    # return render_template('twitch_url.html', status=status)
-    con.close()
-    return "error", 400
+            con.close()
+            return "success", 201
 
 
 def get_duel_game_ids(db_connection):
