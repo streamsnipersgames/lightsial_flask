@@ -27,7 +27,7 @@ def get_token(db_connection, client_name):
     return token[0][0]
 
 
-@app.route('/api/gsk/fifa_add_fixture', methods=('GET', 'POST'))
+@app.route('/api/gsk/fifa/', methods=('GET', 'POST'))
 def post_gsk_fifa_new_fixture():
     con = establish_db_connection()
     token = get_token(con, "gsk")
