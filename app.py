@@ -27,42 +27,51 @@ def get_token(db_connection, client_name):
     return token[0][0]
 
 
-@app.route('/api/gsk/fifa/', methods=('POST', ), strict_slashes=False)
+@app.route('/api/gsk/fifa/', methods=('POST', 'GET', 'DELETE'), strict_slashes=False)
 def post_gsk_fifa_new_fixture():
     con = establish_db_connection()
     token = get_token(con, "gsk")
+    if "Authorization" not in request.headers:
+        con.close()
+        return "missing token", 401
+    if token != request.headers["Authorization"]:
+        con.close()
+        return "bad or expired token, please contact rob@vodsearch.tv to fix", 401
     if request.method == 'POST':
-        # get parameter from the form
-        if "Authorization" not in request.headers:
-            con.close()
-            return "missing token", 401
-        if token != request.headers["Authorization"]:
-            con.close()
-            return "bad or expired token, please contact rob@vodsearch.tv to fix", 401
         twitch_url = request.form.get('twitch_url', None)
         fixture_id = request.form.get('fixture_id', None)
-        ts_start = request.form.get("ts_start", None)
+        ts_start = request.form.get("ts_start", int(datetime.now().timestamp()))
         early_stop = request.form.get("early_stop", None)
 
         if fixture_id is None:
             con.close()
             return "must supply fixture_id", 400
-
-        if early_stop is not None:
-            with con.cursor() as cur:
-                cur.execute(
-                    "UPDATE api_gsk_fifa set status = 2 where fixture_id = %s", (fixture_id, ),
-                )
-            con.commit()
-            con.close()
-            return "success", 201
+        with con.cursor() as cur:
+            cur.execute(f"select count(id) from api_gsk_fifa where fixture_id = {fixture_id}")
+            results = cur.fetchall()
+        n_data_with_fixture = results[0][0]
+        if early_stop is None:
+            # unless this is an early stop, make sure fixture id doesn't already exist
+            if n_data_with_fixture > 0:
+                con.close()
+                return f"fixture_id {fixture_id} already exists, please choose a new one", 400
+        else:
+            # if this is an early stop, stop it
+            if n_data_with_fixture > 0:
+                with con.cursor() as cur:
+                    cur.execute(
+                        "UPDATE api_gsk_fifa set status = 2 where fixture_id = %s", (fixture_id, ),
+                    )
+                con.commit()
+                con.close()
+                return "success", 201
+            else:
+                con.close()
+                return f"fixture_id {fixture_id} not found in database", 400
 
         if twitch_url is None:
             con.close()
             return "must supply twitch_url (url to watch)", 400
-        if ts_start is None:
-            con.close()
-            return "must supply ts_start (starting timestamp) or early_stop", 400
 
         with con.cursor() as cur:
             cur.execute(
@@ -72,6 +81,30 @@ def post_gsk_fifa_new_fixture():
             con.commit()
             con.close()
             return "success", 201
+    if request.method == 'DELETE':
+        fixture_id = request.form.get('fixture_id', None)
+        if fixture_id is None:
+            con.close()
+            return "must supply fixture_id", 400
+        with con.cursor() as cur:
+            cur.execute(f"select count(id) from api_gsk_fifa where fixture_id = {fixture_id}")
+            results = cur.fetchall()
+        if results[0][0] == 0:
+            con.close()
+            return f"fixture_id {fixture_id} is not in our database, so we can't remove it", 400
+        else:
+            with con.cursor() as cur:
+                cur.execute(f"delete from api_gsk_fifa where fixture_id = {fixture_id}")
+            con.commit()
+            con.close()
+            return "success", 201
+    if request.method == "GET":
+        with con.cursor() as cur:
+            cur.execute(f"select fixture_id from api_gsk_fifa")
+            results = cur.fetchall()
+            con.close()
+            fixture_ids = [str(x[0]) for x in results]
+            return f"fixture ids in our database: {', '.join(fixture_ids)}"
 
 
 def get_duel_game_ids(db_connection):
