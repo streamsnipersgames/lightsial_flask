@@ -1,5 +1,6 @@
 from flask import Flask, redirect, render_template, request
-import psycopg2, json
+from flask_cors import cross_origin
+import psycopg2, json, string
 from datetime import datetime
 from decouple import config
 
@@ -28,13 +29,14 @@ def get_token(db_connection, client_name):
 
 
 @app.route('/api/gsk/fifa/', methods=('POST', 'GET', 'DELETE'), strict_slashes=False)
+@cross_origin()
 def post_gsk_fifa_new_fixture():
     con = establish_db_connection()
     token = get_token(con, "gsk")
-    if "Authorization" not in request.headers:
+    if "authorization" not in request.headers:
         con.close()
         return "missing token", 401
-    if token != request.headers["Authorization"]:
+    if token != request.headers["authorization"]:
         con.close()
         return "bad or expired token, please contact rob@vodsearch.tv to fix", 401
     if request.method == 'POST':
@@ -111,7 +113,7 @@ def get_duel_game_ids(db_connection):
     with db_connection.cursor() as cur:
         cur.execute("select game_id, platform_id from api_duel_supportedgames where game_ready")
         results = cur.fetchall()
-    return [{"game_id": x[0], "platform_id": x[1]} for x in results]
+    return [{"igdb_game_slug": x[0], "igdb_platform_id": x[1]} for x in results]
 
 
 def get_wehype_stfc_creators(db_connection, table_name):
@@ -123,6 +125,9 @@ def get_wehype_stfc_creators(db_connection, table_name):
 
 @app.route('/api/duel/booking/', methods=('GET', 'POST', 'DELETE', 'PUT', 'PATCH', ), strict_slashes=False)
 def post_duel_booking():
+    # url_test = "https://filesamples.com/samples/video/flv/sample_640x360.flv"
+    url_test = "https://streamsnipers.s3.us-east-2.amazonaws.com/samples/sample.mp4"
+    safe_chars = string.ascii_lowercase + string.ascii_uppercase + string.digits + '.-_'
     con = establish_db_connection()
     token = get_token(con, "duel")
     status = None
@@ -147,22 +152,34 @@ def post_duel_booking():
             results = cur.fetchall()
         if len(results) == 0:
             con.close()
-            return {"success": False, "description": "booking_id provided not found"}, 400
+            return {"success": False, "description": "booking_id provided not found"}, 422
         with con.cursor() as cur:
             cur.execute("delete from api_duel_bookings where booking_id = %s", (request.form["booking_id"], ))
         con.commit()
         con.close()
-        return {"success": True, "description": ""}, 201
+        return {"success": True, "description": ""}, 200
     elif request.method in ["POST", "PUT", "PATCH"]:
         # add new booking or modify existing booking
         required_fields = ("booking_id", "starts_at", "ends_at", "igdb_game_slug", "igdb_platform_id", "vod_url")
         error_msg = None
-        if set(request.form.keys()) != set(required_fields):
+        request_form = dict(request.form)
+        test_all = bool(request_form.pop("test_all", False))
+        test_highlights = bool(request_form.pop("test_highlights", False))
+        # check for errors
+        ts_now = datetime.now().timestamp()
+        if set(request_form.keys()) != set(required_fields):
             # fields don't match
             error_msg = f"info provided doesn't match expectation, expecting fields: {required_fields}"
         else:
             # fields match, so check other stuff
-            ts_start, ts_end, ts_now = int(request.form["starts_at"]), int(request.form["ends_at"]), int(datetime.now().timestamp())
+            if test_all:
+                request_form["starts_at"] = ts_now + 20
+                request_form["ends_at"] = ts_now + 80
+                request_form["vod_url"] = url_test
+            if test_all or test_highlights:
+                request_form["igdb_game_slug"] = "fortnite"
+                request_form["igdb_platform_id"] = 6
+            ts_start, ts_end = int(request_form["starts_at"]), int(request_form["ends_at"])
             if ts_start > ts_end:
                 error_msg = "starting timestamp is after ending timestamp, please check your info"
             elif ts_start < ts_now:
@@ -171,28 +188,31 @@ def post_duel_booking():
                 error_msg = "starting timestamp > 1yr from today, please double-check"
             elif ts_end - ts_start > 3 * 60 * 60:
                 error_msg = "duel is longer than 3 hours, please double-check your start and end times"
-            elif ts_end - ts_start < 60:
+            elif (ts_end - ts_start < 60) and not test_all:
                 error_msg = "duel is shorter than 1 minute, please double-check your start and end times"
         if error_msg is not None:
             con.close()
-            return {"success": False, "description": error_msg}, 400
-        supported_games_and_platforms = [(x["game_id"], x["platform_id"]) for x in get_duel_game_ids(con)]
-        game_id, platform_id = int(request.form["igdb_game_slug"]), int(request.form["igdb_platform_id"])
+            return {"success": False, "description": error_msg}, 422
+        supported_games_and_platforms = [(x["igdb_game_slug"], x["igdb_platform_id"]) for x in get_duel_game_ids(con)]
+        game_id, platform_id = request_form["igdb_game_slug"], int(request_form["igdb_platform_id"])
+        for c in game_id:
+            if c not in safe_chars:
+                return {"success": True, "description": f"bad character in igdb_game_slug, accepts only: {safe_chars}"}, 400
         if (game_id, platform_id) not in supported_games_and_platforms:
             con.close()
-            return {"success": False, "description": f"(game, platform) pair not supported, currently supporting: {supported_games_and_platforms}"}, 400
+            return {"success": False, "description": f"(game, platform) pair not supported, currently supporting: {supported_games_and_platforms}"}, 422
         if request.method == "POST":
             # first, just confirm the booking id doesn't already exist in our system
             with con.cursor() as cur:
-                cur.execute(f"select id from api_duel_bookings where booking_id = %s", (request.form["booking_id"], ))
+                cur.execute(f"select id from api_duel_bookings where booking_id = %s", (request_form["booking_id"], ))
                 result = cur.fetchall()
             if len(result) > 0:
                 con.close()
-                return {"success": False, "description": "this booking id already exists, did you mean to send a PUT/PATCH request instead?"}, 400
+                return {"success": False, "description": "this booking id already exists, did you mean to send a PUT/PATCH request instead?"}, 422
             with con.cursor() as cur:
                 cur.execute(
                     f"insert into api_duel_bookings ({', '.join(required_fields)}) values (%s, %s, %s, %s, %s, %s)",
-                    tuple([request.form[field] for field in required_fields]),
+                    tuple([request_form[field] for field in required_fields]),
                 )
             con.commit()
             con.close()
@@ -204,7 +224,7 @@ def post_duel_booking():
                 result = cur.fetchall()
                 if len(result) == 0:
                     con.close()
-                    return {"success": False, "description": "booking id not recognized"}, 400
+                    return {"success": False, "description": "booking id not recognized"}, 422
                 booking_id = result[0][0]
                 field_cmd = ", ".join([f"{field} = %s" for field in required_fields])
                 field_values = [request.form.get(field) for field in required_fields]
